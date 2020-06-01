@@ -665,9 +665,10 @@ CREATE TABLE migration_st.st_hiv_enrollment
       <schema_name/>
     </partitioning>
     <connection>mssql</connection>
-    <sql>-- 2. HIV Enrollment DML Validated by Chester v3.1.0 (Added date of diagnisis)
+    <sql>-- 2. HIV Enrollment DML Validated by LO v2.0.0 
 
 
+-- -----------------------------2. HIV Enrollment DML ---------------------------------------------
 EXEC pr_OpenDecryptedSession;
 
 SELECT DISTINCT P.Id AS Person_Id
@@ -736,7 +737,9 @@ SELECT DISTINCT P.Id AS Person_Id
 	,treatmentl.Relationship_of_treatment_supporter
 	,treatmentl.Treatment_supporter_telephone
 	,treatmentl.Treatment_supporter_address
-	,0 AS Voided
+	,0 AS Voided,
+	P.CreateDate as Create_Date,
+	P.CreatedBy as Created_By
 FROM Person P
 INNER JOIN Patient PT ON PT.PersonId = P.Id
 INNER JOIN PatientEnrollment PE ON PE.PatientId = PT.Id
@@ -809,7 +812,7 @@ LEFT JOIN (
 	FROM (
 		SELECT *
 			,ROW_NUMBER() OVER (
-				PARTITION BY PatientId ORDER BY PatientMasterVisitId desc
+				PARTITION BY PatientId ORDER BY PatientMasterVisitId
 				) rownum
 		FROM PatientBaselineView
 		) rte
