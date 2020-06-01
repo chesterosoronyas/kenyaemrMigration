@@ -430,7 +430,7 @@
     <created_date>2020/06/01 11:12:32.819</created_date>
     <modified_user>-</modified_user>
     <modified_date>2020/06/01 11:12:32.819</modified_date>
-    <key_for_session_key>H4sIAAAAAAAAAAMAAAAAAAAAAAA=</key_for_session_key>
+    <key_for_session_key/>
     <is_key_private>N</is_key_private>
   </info>
   <notepads>
@@ -512,13 +512,13 @@
 DROP TABLE IF EXISTS migration_tr.tr_complaints;
 CREATE TABLE migration_tr.tr_complaints as
     select
-    cmpl.Person_Id,
-    cmpl.Encounter_Date,
-    cmpl.Encounter_ID,
-   (case cmpl.Presenting_complaints
+    Person_Id,
+    Encounter_Date,
+    Encounter_ID,
+   (case Presenting_complaints
        when "Yes" then 1065
        when "No" then 1066  else NULL end)as Presenting_complaints,
-   (case cmpl.Presenting_complaints
+   (case Presenting_complaints
         when "Weight loss" then 832
         when "Vomiting" then 122983
         when "Vertigo" then 111525
@@ -581,14 +581,11 @@ CREATE TABLE migration_tr.tr_complaints as
         when "Abnormal uterine bleeding" then 141631
         when "Abdominal pain" then 151
         when "Other" then 5622  else '' end)as Complaint,
-   cmpl.Duration,
-   cmpl.Onset_Date,
-   cmpl.CreatedBy,
-   cmpl.CreatedDate
-    FROM migration_st.st_complaints cmpl
-       INNER JOIN migration_tr.tr_demographics dm ON dm.Person_Id = cmpl.Person_Id
-       WHERE (cmpl.Encounter_Date != "" OR cmpl.Encounter_Date IS NOT NULL) AND  (cmpl.Presenting_complaints != "" OR cmpl.Presenting_complaints IS NOT NULL)
-       GROUP BY cmpl.Person_Id, cmpl.Encounter_Date;</sql>
+   Duration,
+   Onset_Date
+    FROM migration_st.st_complaints WHERE
+       (Encounter_Date != "" OR Encounter_Date IS NOT NULL)
+  GROUP BY Person_Id, Encounter_Date;</sql>
     <set_params>N</set_params>
     <insert_field/>
     <update_field/>
@@ -605,8 +602,8 @@ CREATE TABLE migration_tr.tr_complaints as
       </output>
     </remotesteps>
     <GUI>
-      <xloc>224</xloc>
-      <yloc>112</yloc>
+      <xloc>623</xloc>
+      <yloc>83</yloc>
       <draw>Y</draw>
     </GUI>
   </step>

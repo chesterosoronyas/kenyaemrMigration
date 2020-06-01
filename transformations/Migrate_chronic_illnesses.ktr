@@ -430,7 +430,7 @@
     <created_date>2020/06/01 11:20:09.190</created_date>
     <modified_user>-</modified_user>
     <modified_date>2020/06/01 11:20:09.190</modified_date>
-    <key_for_session_key>H4sIAAAAAAAAAAMAAAAAAAAAAAA=</key_for_session_key>
+    <key_for_session_key/>
     <is_key_private>N</is_key_private>
   </info>
   <notepads>
@@ -579,14 +579,12 @@ CREATE TABLE migration_st.st_chronic_illness (
   Person_Id                        INT(11),
   Encounter_Date                   DATE,
   Encounter_ID                     VARCHAR(50),
-  Has_Chronic_illnesses_cormobidities TEXT,
-  Chronic_illnesses_name            TEXT,
+  Has_Chronic_illnesses_cormobidities VARCHAR(200),
+  Chronic_illnesses_name            VARCHAR(200),
   Chronic_illnesses_onset_date      DATE,
-  Treatment 						TEXT,
-  Dose								TEXT,
-  Duration						    TEXT,
-  CreateBy             		       VARCHAR(100),
-  CreateDate			    	   DATE,  
+  Treatment 						VARCHAR(200),
+  Dose								int(11),
+  Duration						     int(11),
   Voided                           int(11)
 );
 </sql>
@@ -606,8 +604,8 @@ CREATE TABLE migration_st.st_chronic_illness (
       </output>
     </remotesteps>
     <GUI>
-      <xloc>64</xloc>
-      <yloc>64</yloc>
+      <xloc>45</xloc>
+      <yloc>41</yloc>
       <draw>Y</draw>
     </GUI>
   </step>
@@ -632,8 +630,6 @@ pcs.OnsetDate as Chronic_illnesses_onset_date,
 pcs.Treatment,
 pcs.Dose,
 pcs.Duration,
-pcs.CreateBy,
-pcs.CreateDate,
 pcs.DeleteFlag as Voided
 from PatientChronicIllness pcs
 inner join Patient p on p.Id=pcs.PatientId
@@ -655,8 +651,8 @@ inner join PatientMasterVisit pmv on pmv.Id=pcs.PatientMasterVisitId
       </output>
     </remotesteps>
     <GUI>
-      <xloc>384</xloc>
-      <yloc>64</yloc>
+      <xloc>317</xloc>
+      <yloc>41</yloc>
       <draw>Y</draw>
     </GUI>
   </step>
@@ -699,8 +695,8 @@ inner join PatientMasterVisit pmv on pmv.Id=pcs.PatientMasterVisitId
       </output>
     </remotesteps>
     <GUI>
-      <xloc>736</xloc>
-      <yloc>64</yloc>
+      <xloc>669</xloc>
+      <yloc>41</yloc>
       <draw>Y</draw>
     </GUI>
   </step>
