@@ -596,6 +596,7 @@ CREATE TABLE migration_st.st_hiv_followup
   Ptn_PK                             INT(11),
   Encounter_Date                     DATE,
   Encounter_ID                  	 VARCHAR(100),
+  Encounter_type                  	 VARCHAR(100),
   Visit_scheduled            	     VARCHAR(100),
   Visit_by                  	     VARCHAR(100),
   Visit_by_other           		     VARCHAR(100),
@@ -720,13 +721,14 @@ CREATE TABLE migration_st.st_hiv_followup
       <schema_name/>
     </partitioning>
     <connection>mssql</connection>
-    <sql>-- 16. HIV Followup Validated by FG V6.0.0
+    <sql>-- 16. HIV Followup Validated by CO V7.0.0 
 
 --greencard followup
 SELECT P.PersonId Person_Id,
 		P.ptn_pk
 	,format(cast(PM.VisitDate AS DATE), 'yyyy-MM-dd') AS Encounter_Date
 	,NULL Encounter_ID
+	,'C' as Encounter_Type
 	,CASE
 		WHEN PM.VisitScheduled = '0'
 			THEN 'No'
@@ -1502,6 +1504,7 @@ P.PersonId Person_Id,
 P.Ptn_Pk,
 format(cast(coalesce(PD.DispensedByDate,PD.OrderedByDate,PD.VisitDate) AS DATE), 'yyyy-MM-dd') AS Encounter_Date,
 NULL AS Encounter_ID,
+'P' as Encounter_Type,
 NULL AS Visit_scheduled,
 NULL AS Visit_by,
 NULL Visit_by_other,
@@ -1600,6 +1603,7 @@ P.PersonId Person_Id,
 MP.Ptn_Pk,
 format(cast(OV.VisitDate AS DATE), 'yyyy-MM-dd') AS Encounter_Date,
 NULL AS Encounter_ID,
+'C' as Encounter_Type,
 CASE WHEN ISNULL(PAE.Scheduled, '0') = '0' THEN 'No' WHEN PAE.Scheduled = '1' THEN 'Yes' END AS Visit_scheduled,
 CASE (select Name from mst_bluedecode where codeid=8 and (DeleteFlag = 0 or DeleteFlag IS NULL) and ID = OV.TypeofVisit)
 WHEN 'SF - Self' THEN 'S' WHEN 'TS - Treatment Supporter' THEN 'TS' ELSE 'S' END AS Visit_by,
@@ -1719,6 +1723,7 @@ P.PersonId Person_Id,
 P.Ptn_Pk,
 format(cast(coalesce(t.DispensedByDate,t.OrderedByDate,t.VisitDate) AS DATE), 'yyyy-MM-dd') AS Encounter_Date,
 NULL AS Encounter_ID,
+'P' as Encounter_Type,
 NULL AS Visit_scheduled,
 NULL AS Visit_by,
 NULL Visit_by_other,
