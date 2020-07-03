@@ -721,7 +721,7 @@ CREATE TABLE migration_st.st_hiv_followup
       <schema_name/>
     </partitioning>
     <connection>mssql</connection>
-    <sql>-- 16. HIV Followup Validated by CO V7.0.0 
+    <sql>-- 16. HIV Followup Validated by CO V9.0.0 
 
 --greencard followup
 SELECT P.PersonId Person_Id,
@@ -768,6 +768,11 @@ SELECT P.PersonId Person_Id,
 				ORDER BY Id DESC
 				)
 		)
+	,CASE WHEN pres.PresentingComplaint is null then 'No' else 'Yes' end as Presenting_complaints
+	,CASE WHEN paa.Has_Known_allergies is null then 'No' else paa.Has_Known_allergies end as Has_Known_allergies
+	,CASE when adve.hasAdverseEvent is null then 'No' else adve.hasAdverseEvent end as Has_adverse_drug_reaction
+	,chr.Has_Chronic_illnesses_cormobidities
+
 	,Clinical_notes = (
 		SELECT TOP 1 ClinicalNotes
 		FROM PatientClinicalNotes
@@ -855,11 +860,12 @@ SELECT P.PersonId Person_Id,
 	,gn.FindingsNotes AS Genitourinary_finding_notes
 	,NULL Treatment_plan
 	,ctx.ScoreName AS Ctx_adherence
-	,CASE
+	/*,CASE
 		WHEN ctx.VisitDate IS NOT NULL
 			THEN 'Yes'
 		ELSE ' No'
-		END AS Ctx_dispensed
+		END AS Ctx_dispensed*/
+    ,ctxph.OnCtx as Ctx_Dispensed
 	,NULL AS Dapsone_adherence
 	,NULL AS Dapsone_dispensed
 	,adass.Morisky_forget_taking_drugs
@@ -871,12 +877,12 @@ SELECT P.PersonId Person_Id,
 	,adass.Morisky_feel_under_pressure_on_treatment_plan
 	,adass.Morisky_how_often_difficulty_remembering
 	,adv.ScoreName AS Arv_adherence
-	,Condom_Provided = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'CD' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'CD' THEN 'Yes' ELSE 'No' END
-	,Screened_for_substance_abuse = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'SA' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'SA' THEN 'Yes' ELSE 'No' END
-	,Pwp_Disclosure = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'Disc' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'Disc' THEN 'Yes' ELSE 'No' END
-	,Pwp_partner_tested = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'PT' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'PT' THEN 'Yes' ELSE 'No' END
+	,Condom_Provided = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'CD' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'CD' THEN 'Yes' ELSE NULL END
+	,Screened_for_substance_abuse = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'SA' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'SA' THEN 'Yes' ELSE NULL END
+	,Pwp_Disclosure = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'Disc' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'Disc' THEN 'Yes' ELSE NULL END
+	,Pwp_partner_tested = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'PT' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'PT' THEN 'Yes' ELSE NULL END
 	,cacx.ScreeningValue AS Cacx_Screening
-	,Screened_for_sti = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'STI' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'STI' THEN 'Yes' ELSE 'No' END
+	,Screened_for_sti = CASE WHEN (select top 1 ItemName from LookupItemView where MasterName = 'PHDP' and ItemName = 'STI' AND ItemId = (select top 1 Phdp from PatientPHDP where PatientMasterVisitId = PM.Id AND PatientId = P.Id order by Id desc)) = 'STI' THEN 'Yes' ELSE NULL END
 	,scp.PartnerNotification AS Sti_partner_notification
 	,pcc.Stability AS Stability
 	,format(cast(
@@ -1432,6 +1438,38 @@ LEFT JOIN (
 	WHERE psc.rownum = '1'
 	) cacx ON cacx.PatientId = pe.PatientId
 	AND cacx.PatientMasterVisitId = pe.PatientMasterVisitId
+---PresentingComplaints
+left join (select PatientId,PatientMasterVisitId,PresentingComplaintsId,PresentingComplaint from (select  PatientId,PatientMasterVisitId,PresentingComplaintsId,pres.deleteFlag,CreatedBy,CreatedDate,lt.DisplayName as PresentingComplaint,
+ROW_NUMBER() OVER(partition by PatientId,PatientMasterVisitId order by CreatedDate desc)rownum
+ from PresentingComplaints pres
+ inner join LookupItem lt on lt.Id=pres.PresentingComplaintsId
+ where pres.deleteFlag is null or pres.deleteFlag=0
+ ) pre where rownum='1')pres on pres.PatientId=pe.PatientId and pres.PatientMasterVisitId=pe.PatientMasterVisitId
+
+ ---
+ left join(select * from (select PatientId,PatientMasterVisitId,OnsetDate ,AllergenName as Allergies_causative_agents,ReactionName as Allergies_reactions,'Yes' as Has_Known_allergies,
+SeverityName as Allergies_severity,ROW_NUMBER() OVER(partition by PatientId,PatientMasterVisitId order by  PatientMasterVisitId desc)rownum
+
+ from PatientAllergyView
+where DeleteFlag is null or DeleteFlag=0
+ )pav where pav.rownum =1)paa on paa.PatientId=pe.PatientId and paa.PatientMasterVisitId =pe.PatientMasterVisitId
+ ----
+ 
+left join(select ad.PatientId,ad.PatientMasterVisitId,ad.hasAdverseEvent from (select PatientId,PatientMasterVisitId,EventName,EventCause,Severity,'Yes' hasAdverseEvent ,DeleteFlag,ROW_NUMBER() OVER(partition by PatientId,PatientMasterVisitId order by  PatientMasterVisitId desc)rownum from AdverseEvent
+)ad where ad.rownum=1)adve on adve.PatientId=pe.PatientId and adve.PatientMasterVisitId=pe.PatientMasterVisitId
+
+
+ ---
+ left join (select * from (select PatientId,PatientMasterVisitId ,ChronicIllness as Chronic_illnesses_name,
+OnsetDate as Chronic_illnesses_onset_date ,'Yes' as Has_Chronic_illnesses_cormobidities,
+ROW_NUMBER() OVER(partition by PatientId,PatientMasterVisitId order by  PatientMasterVisitId desc)rownum
+
+ from PatientChronicIllnessView
+ where DeleteFlag is null or DeleteFlag=0
+ )pav where pav.rownum =1
+)chr on chr.PatientId =pe.PatientId and chr.PatientMasterVisitId =pe.PatientMasterVisitId
+
+ ----
 LEFT JOIN (
 	SELECT *
 	FROM (
@@ -1461,6 +1499,35 @@ LEFT JOIN (
 	WHERE adv.rownum = '1'
 	) ctx ON ctx.PatientId = pe.PatientId
 	AND ctx.PatientMasterVisitId = pe.PatientMasterVisitId
+
+left join(select ctx.PersonId,ctx.OnCtx,ctx.DispensedByDate,ctx.Drug_name,ctx.Ptn_pk from(select 
+P.PersonId,
+OPPO.Ptn_pk,
+OPPO.OrderedByDate,
+NULL Encounter_ID,
+RM.RegimenType,
+OPPO.PatientMasterVisitId,
+CASE WHEN (select DrugName from VW_Drug where DrugName like '%Sulfa/TMX-Cotrimoxazole%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%Sulfa%tmx%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%co%tri%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%dapson%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ else NULL end as OnCtx,
+(select top 1 DrugName from VW_Drug where Drug_pk = DPPO.Drug_Pk) Drug_name,
+Dose = (1),
+Unit = (select StrengthName from mst_Strength where StrengthId = (SELECT top 1 StrengthId FROM Lnk_DrugStrength where DrugId=DPPO.Drug_Pk)),
+Frequency = (select top 1 Name from mst_Frequency where FrequencyID = DPPO.FrequencyID),
+Duration = (DPPO.Duration),
+Duration_units  = ('days'),  
+Prescription_provider = (Select UserFirstName + ' '+ UserLastName from mst_User where UserID = OPPO.UserID),
+Dispensing_provider = (Select UserFirstName + ' '+ UserLastName from mst_User where UserID = DPPO.UserID),
+OPPO.DispensedByDate
+from ord_PatientPharmacyOrder OPPO
+LEFT JOIN dtl_RegimenMap RM ON RM.OrderID = OPPO.ptn_pharmacy_pk
+LEFT JOIN dtl_PatientPharmacyOrder DPPO ON OPPO.ptn_pharmacy_pk = DPPO.ptn_pharmacy_pk
+LEFT JOIN Patient P ON P.ptn_pk = OPPO.Ptn_pk
+)ctx where ctx.OnCtx='Yes')ctxph on ctxph.Ptn_pk=p.ptn_pk 
+and datediff(day, ctxph.DispensedByDate, PM.VisitDate) = 0
+--and format(CAST(ctxph.DispensedByDate as date),'yyyy-mm-dd')=format(cast(PM.VisitDate AS DATE), 'yyyy-MM-dd') or ctxph
 LEFT JOIN (
 	SELECT *
 	FROM (
@@ -1510,6 +1577,10 @@ NULL AS Visit_by,
 NULL Visit_by_other,
 NULL AS Nutritional_status,
 NULL AS Who_stage,
+NULL Presenting_complaints,
+NULL Has_Known_allergies,
+NULL Has_adverse_drug_reaction,
+NULL Has_Chronic_illnesses_cormobidities,
 NULL AS Clinical_notes,
 NULL as Last_menstrual_period,
 NULL as Pregnancy_status,
@@ -1543,7 +1614,7 @@ NULL as Genitourinary,
 NULL as Genitourinary_finding_notes,
 NULL as Treatment_plan,
 NULL as Ctx_adherence,
-NULL as Ctx_dispensed,
+PD.ctxDispensed  as Ctx_dispensed,
 NULL as Dapsone_adherence,
 NULL as Dapsone_dispensed,
 NULL Morisky_forget_taking_drugs,
@@ -1577,11 +1648,41 @@ PM.VisitDate,
 o.DispensedByDate,
 o.OrderedByDate
 ,o.UserID as Created_by
-,o.CreateDate as Create_date
+,o.CreateDate as Create_date,
+cotph.OnCtx as ctxDispensed
 FROM ord_PatientPharmacyOrder o
 INNER JOIN dtl_PatientPharmacyOrder ro on ro.ptn_pharmacy_pk = o.ptn_pharmacy_pk
 LEFT JOIN PatientMasterVisit PM on PM.Id = o.PatientMasterVisitId
 LEFT JOIN PatientEncounter PE ON PE.PatientMasterVisitId = PM.Id
+left join(select ctx.PersonId,ctx.OnCtx,ctx.DispensedByDate,ctx.Drug_name,ctx.Ptn_pk,ctx.ptn_pharmacy_pk from(select 
+P.PersonId,
+OPPO.Ptn_pk,
+OPPO.ptn_pharmacy_pk,
+OPPO.OrderedByDate,
+NULL Encounter_ID,
+RM.RegimenType,
+OPPO.PatientMasterVisitId,
+
+CASE WHEN (select DrugName from VW_Drug where DrugName like '%Sulfa/TMX-Cotrimoxazole%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%Sulfa%tmx%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%co%tri%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%dapson%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ else NULL end as OnCtx,
+(select top 1 DrugName from VW_Drug where Drug_pk = DPPO.Drug_Pk) Drug_name,
+Dose = (1),
+Unit = (select StrengthName from mst_Strength where StrengthId = (SELECT top 1 StrengthId FROM Lnk_DrugStrength where DrugId=DPPO.Drug_Pk)),
+Frequency = (select top 1 Name from mst_Frequency where FrequencyID = DPPO.FrequencyID),
+Duration = (DPPO.Duration),
+Duration_units  = ('days'),  
+Prescription_provider = (Select UserFirstName + ' '+ UserLastName from mst_User where UserID = OPPO.UserID),
+Dispensing_provider = (Select UserFirstName + ' '+ UserLastName from mst_User where UserID = DPPO.UserID),
+OPPO.DispensedByDate
+from ord_PatientPharmacyOrder OPPO
+LEFT JOIN dtl_RegimenMap RM ON RM.OrderID = OPPO.ptn_pharmacy_pk
+LEFT JOIN dtl_PatientPharmacyOrder DPPO ON OPPO.ptn_pharmacy_pk = DPPO.ptn_pharmacy_pk
+LEFT JOIN Patient P ON P.ptn_pk = OPPO.Ptn_pk
+)ctx where ctx.OnCtx='Yes')cotph on cotph.Ptn_pharmacy_pk=ro.ptn_pharmacy_pk
+
 WHERE o.DispensedByDate is not null AND ro.Prophylaxis = 0  AND o.ProgID IN (SELECT ID FROM mst_Decode WHERE Name IN ('ART', 'PMTCT')) AND o.PatientMasterVisitId IS NOT NULL AND PE.EncounterTypeId = (SELECT ItemId FROM LookupItemView WHERE MasterName = 'EncounterType' AND ItemName = 'Pharmacy-encounter')) PD
 LEFT JOIN (
 SELECT 
@@ -1611,6 +1712,10 @@ NULL Visit_by_other,
 NULL AS Nutritional_status,
 CASE(select Name from mst_Decode where CodeID = 22  and (DeleteFlag = 0 or DeleteFlag IS NULL) AND ID = PS.WHOStage)
 WHEN '1' THEN 'Stage1' WHEN '2' THEN 'Stage2' WHEN '3' THEN 'Stage3' WHEN '4' THEN 'Stage4' WHEN 'N/A' THEN NULL WHEN 'T1' THEN 'Stage1' WHEN 'T2' THEN 'Stage2' WHEN 'T3' THEN 'Stage3' WHEN 'T4' THEN 'Stage4' ELSE NULL END AS Who_stage,
+NULL Presenting_complaints,
+NULL Has_Known_allergies,
+NULL Has_adverse_drug_reaction,
+NULL Has_Chronic_illnesses_cormobidities,
 NULL AS Clinical_notes,
 NULL as Last_menstrual_period,
 NULL as Pregnancy_status,
@@ -1644,7 +1749,7 @@ NULL as Genitourinary,
 NULL as Genitourinary_finding_notes,
 NULL as Treatment_plan,
 NULL as Ctx_adherence,
-NULL as Ctx_dispensed,
+cotph.OnCtx as Ctx_dispensed,
 NULL as Dapsone_adherence,
 NULL as Dapsone_dispensed,
 NULL Morisky_forget_taking_drugs,
@@ -1705,6 +1810,35 @@ LEFT JOIN dtl_PatientARTEncounter PAE ON PAE.Visit_Id = OV.Visit_Id
 LEFT JOIN dtl_PatientStage PS ON PS.Visit_Pk = OV.Visit_Id
 LEFT JOIN dtl_PatientDisease PDS ON PDS.Visit_Pk = OV.Visit_Id AND MP.Ptn_Pk = PDS.Ptn_Pk
 LEFT JOIN dtl_patientCounseling PC ON PC.Visit_pk = OV.Visit_Id AND PC.Ptn_pk = MP.Ptn_Pk
+left join(select ctx.PersonId,ctx.OnCtx,ctx.DispensedByDate,ctx.Drug_name,ctx.Ptn_pk,ctx.ptn_pharmacy_pk from(select 
+P.PersonId,
+OPPO.Ptn_pk,
+OPPO.ptn_pharmacy_pk,
+OPPO.OrderedByDate,
+NULL Encounter_ID,
+RM.RegimenType,
+OPPO.PatientMasterVisitId,
+
+CASE WHEN (select DrugName from VW_Drug where DrugName like '%Sulfa/TMX-Cotrimoxazole%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%Sulfa%tmx%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%co%tri%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%dapson%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ else NULL end as OnCtx,
+(select top 1 DrugName from VW_Drug where Drug_pk = DPPO.Drug_Pk) Drug_name,
+Dose = (1),
+Unit = (select StrengthName from mst_Strength where StrengthId = (SELECT top 1 StrengthId FROM Lnk_DrugStrength where DrugId=DPPO.Drug_Pk)),
+Frequency = (select top 1 Name from mst_Frequency where FrequencyID = DPPO.FrequencyID),
+Duration = (DPPO.Duration),
+Duration_units  = ('days'),  
+Prescription_provider = (Select UserFirstName + ' '+ UserLastName from mst_User where UserID = OPPO.UserID),
+Dispensing_provider = (Select UserFirstName + ' '+ UserLastName from mst_User where UserID = DPPO.UserID),
+OPPO.DispensedByDate
+from ord_PatientPharmacyOrder OPPO
+LEFT JOIN dtl_RegimenMap RM ON RM.OrderID = OPPO.ptn_pharmacy_pk
+LEFT JOIN dtl_PatientPharmacyOrder DPPO ON OPPO.ptn_pharmacy_pk = DPPO.ptn_pharmacy_pk
+LEFT JOIN Patient P ON P.ptn_pk = OPPO.Ptn_pk
+)ctx where ctx.OnCtx='Yes')cotph on cotph.Ptn_pk=OV.Ptn_Pk
+ and DATEDIFF(day,cotph.DispensedByDate,OV.VisitDate)=0
 LEFT JOIN (
 		SELECT a.appdate,
 		b.Name,
@@ -1729,6 +1863,10 @@ NULL AS Visit_by,
 NULL Visit_by_other,
 NULL AS Nutritional_status,
 NULL AS Who_stage,
+NULL Presenting_complaints,
+NULL Has_Known_allergies,
+NULL Has_adverse_drug_reaction,
+NULL Has_Chronic_illnesses_cormobidities,
 NULL AS Clinical_notes,
 NULL as Last_menstrual_period,
 NULL as Pregnancy_status,
@@ -1762,7 +1900,7 @@ NULL as Genitourinary,
 NULL as Genitourinary_finding_notes,
 NULL as Treatment_plan,
 NULL as Ctx_adherence,
-NULL as Ctx_dispensed,
+cotph.OnCtx as Ctx_dispensed,
 NULL as Dapsone_adherence,
 NULL as Dapsone_dispensed,
 NULL Morisky_forget_taking_drugs,
@@ -1792,12 +1930,42 @@ NULL as Voided
 from(SELECT dateadd(day, d.Duration, CASE WHEN o.OrderedByDate > o.DispensedByDate THEN o.OrderedByDate ELSE o.DispensedByDate END) AS ExpectedReturn, 
 o.DispensedByDate, o.OrderedByDate,
 o.Ptn_pk, ov.VisitDate, ov.VisitType, ov.Visit_Id,
-o.CreateDate,o.UserID
+o.CreateDate,o.UserID,d.ptn_pharmacy_pk
 FROM ord_PatientPharmacyOrder o 
 INNER JOIN ord_Visit ov ON ov.Visit_Id = o.VisitID
 INNER JOIN dtl_PatientPharmacyOrder d ON d.ptn_pharmacy_pk = o.ptn_pharmacy_pk
 WHERE ov.VisitType = 4 AND d.Prophylaxis = 0  AND o.ProgID IN (SELECT ID FROM mst_Decode WHERE Name IN ('ART', 'PMTCT')) AND o.DispensedByDate IS NOT NULL and o.PatientMasterVisitId is null) t
 INNER JOIN Patient P ON P.ptn_pk = t.Ptn_Pk
+left join(select ctx.PersonId,ctx.OnCtx,ctx.DispensedByDate,ctx.Drug_name,ctx.Ptn_pk,ctx.ptn_pharmacy_pk from(select 
+P.PersonId,
+OPPO.Ptn_pk,
+OPPO.ptn_pharmacy_pk,
+OPPO.OrderedByDate,
+NULL Encounter_ID,
+RM.RegimenType,
+OPPO.PatientMasterVisitId,
+
+CASE WHEN (select DrugName from VW_Drug where DrugName like '%Sulfa/TMX-Cotrimoxazole%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%Sulfa%tmx%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%co%tri%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ WHEN (select DrugName from VW_Drug where DrugName like '%dapson%' AND Drug_pk = DPPO.Drug_Pk) IS NOT NULL THEN 'Yes'
+ else NULL end as OnCtx,
+(select top 1 DrugName from VW_Drug where Drug_pk = DPPO.Drug_Pk) Drug_name,
+Dose = (1),
+Unit = (select StrengthName from mst_Strength where StrengthId = (SELECT top 1 StrengthId FROM Lnk_DrugStrength where DrugId=DPPO.Drug_Pk)),
+Frequency = (select top 1 Name from mst_Frequency where FrequencyID = DPPO.FrequencyID),
+Duration = (DPPO.Duration),
+Duration_units  = ('days'),  
+Prescription_provider = (Select UserFirstName + ' '+ UserLastName from mst_User where UserID = OPPO.UserID),
+Dispensing_provider = (Select UserFirstName + ' '+ UserLastName from mst_User where UserID = DPPO.UserID),
+OPPO.DispensedByDate
+from ord_PatientPharmacyOrder OPPO
+LEFT JOIN dtl_RegimenMap RM ON RM.OrderID = OPPO.ptn_pharmacy_pk
+LEFT JOIN dtl_PatientPharmacyOrder DPPO ON OPPO.ptn_pharmacy_pk = DPPO.ptn_pharmacy_pk
+LEFT JOIN Patient P ON P.ptn_pk = OPPO.Ptn_pk
+)ctx where ctx.OnCtx='Yes')cotph on cotph.Ptn_pk=t.Ptn_pk
+ and cotph.ptn_pharmacy_pk=t.ptn_pharmacy_pk
+
 left join( select 
 vo.Ptn_Pk,
 vo.VisitDate
